@@ -8,6 +8,26 @@ from binance.client import Client
 from bisect import bisect_right
 
 
+def highest_bid_price(bids):
+    """
+    :param bids: required
+    :type bids: list
+    :returns: float
+    """
+    order = max(bids, key=lambda x: float(x[0]))
+    return float(order[0])
+
+
+def lowest_ask_price(asks):
+    """
+    :param asks: required
+    :type asks: list
+    :returns: float
+    """
+    order = min(asks, key=lambda x: float(x[0]))
+    return float(order[0])
+
+
 if __name__ == "__main__":
 
     #  Configure logging
@@ -56,7 +76,7 @@ if __name__ == "__main__":
 
         if symbol['quoteAsset'] == 'USDT':
             ticker = client.get_ticker(symbol=symbol['symbol'])
-            pair = [symbol['symbol'], float(ticker['count'])]
+            pair = [symbol['symbol'], int(ticker['count'])]
             quote_asset_usd_trades.insert(
                 bisect_right(quote_asset_usd_keys, pair[1]),
                 pair
@@ -71,11 +91,8 @@ if __name__ == "__main__":
 
     top_quote_asset_btc_volumes = quote_asset_btc_volumes[-5:]
     top_quote_asset_btc_volumes.reverse()
-    for i in range(0, 5):
-        app_logger.info('Symbol: %s, 24h Volume, BTC: %f',
-                        top_quote_asset_btc_volumes[i][0],
-                        top_quote_asset_btc_volumes[i][1]
-                        )
+    for item in top_quote_asset_btc_volumes:
+        app_logger.info('Symbol: {:10}, 24h Volume, BTC: {:020.10f}'.format(item[0], item[1]))
 
 # Q (2)
     app_logger.info('''\n
@@ -85,11 +102,8 @@ if __name__ == "__main__":
 
     top_quote_asset_usd_trades = quote_asset_usd_trades[-5:]
     top_quote_asset_usd_trades.reverse()
-    for i in range(0, 5):
-        app_logger.info('Symbol: %s, Trades: %f',
-                        top_quote_asset_usd_trades[i][0],
-                        top_quote_asset_usd_trades[i][1]
-                        )
+    for item in top_quote_asset_usd_trades:
+        app_logger.info('Symbol: {:10}, Trades, BTC: {:010d}'.format(item[0], item[1]))
 
 # Q (3)
     app_logger.info('''\n
@@ -105,10 +119,24 @@ if __name__ == "__main__":
             notional_value_bids += float(bid[1]) * float(bid[0])
         for ask in order_book['asks']:
             notional_value_asks += float(ask[1]) * float(ask[0])
-        app_logger.info('Oder book for symbol: %s, Notional value, BTC: %f',
-                        symbol[0],
-                        notional_value_bids + notional_value_asks
-                        )
-        break
+        app_logger.info(
+            'Oder book for symbol: {:10}, Notional value, BTC: {:018.10f}'.format(
+                symbol[0],
+                notional_value_bids + notional_value_asks)
+        )
+
+# Q (4)
+    app_logger.info('''\n
+        (4) What is the price spread for each of the symbols from Q2?
+        * for the latest order book
+    ''')
+
+    for symbol in top_quote_asset_btc_volumes:
+        order_book = client.get_order_book(symbol=symbol[0])
+        spread = lowest_ask_price(order_book['asks']) - highest_bid_price(order_book['bids'])
+        app_logger.info('Symbol: {:10}, spread, USD: {:018.10f}'.format(symbol[0], spread))
 
     app_logger.info('\nCompleted')
+
+# 5. Every 10 seconds print the result of Q4 and the absolute delta from the previous value for each symbol.
+# 6. Make the output of Q5 accessible by querying http://localhost:8080/metrics using the Prometheus Metrics format.
