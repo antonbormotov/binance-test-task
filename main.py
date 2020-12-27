@@ -28,6 +28,18 @@ def lowest_ask_price(asks):
     return float(order[0])
 
 
+def get_spread(asks, bids):
+    """
+    :param asks: required
+    :type asks: list
+    :param bids: required
+    :type bids: list
+    :returns: float
+    """
+    result = lowest_ask_price(asks) - highest_bid_price(bids)
+    return result
+
+
 if __name__ == "__main__":
 
     #  Configure logging
@@ -133,7 +145,7 @@ if __name__ == "__main__":
 
     for symbol in top_quote_asset_btc_volumes:
         order_book = client.get_order_book(symbol=symbol[0])
-        spread = lowest_ask_price(order_book['asks']) - highest_bid_price(order_book['bids'])
+        spread = get_spread(order_book['asks'], order_book['bids'])
         app_logger.info('Symbol: {:10}, spread, USD: {:018.10f}'.format(symbol[0], spread))
 
     app_logger.info('\nCompleted')
