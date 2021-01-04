@@ -7,6 +7,6 @@ services:
     volumes:
       - ../:/usr/src/binance/
     working_dir: /usr/src/binance/
-    tty: true
-    restart: always
+    environment:
+      TZ: Asia/Krasnoyarsk
     command: python /usr/src/binance/main.py
