@@ -1,0 +1,12 @@
+version: '2.4'
+
+services:
+  python:
+    build:
+      context: ../
+    volumes:
+      - ../:/usr/src/binance/
+    working_dir: /usr/src/binance/
+    tty: true
+    restart: always
+    command: python /usr/src/binance/main.py
