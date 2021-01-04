@@ -5,7 +5,10 @@ import configparser
 import datetime
 import logging
 from binance.client import Client
+from binance.websockets import BinanceSocketManager
 from bisect import bisect_right
+from twisted.internet import task, reactor
+from queue import LifoQueue
 
 
 def highest_bid_price(bids):
@@ -28,7 +31,7 @@ def lowest_ask_price(asks):
     return float(order[0])
 
 
-def get_spread(asks, bids):
+def calc_spread(asks, bids):
     """
     :param asks: required
     :type asks: list
@@ -38,6 +41,45 @@ def get_spread(asks, bids):
     """
     result = lowest_ask_price(asks) - highest_bid_price(bids)
     return result
+
+
+def get_spread(binance_client, symbols):
+    """
+    :param symbols: required
+    :type symbols: list
+    :param binance_client: required
+    :type binance_client: Client
+    :returns: list
+    """
+    result = []
+    for symbol in symbols:
+        order_book = binance_client.get_order_book(symbol=symbol[0])
+        spread = calc_spread(order_book['asks'], order_book['bids'])
+        result.append([symbol[0], spread])
+    return result
+
+
+def output_spread_and_delta(logger, binance_client, symbols, stack):
+    """
+    :param logger: required
+    :param binance_client: required
+    :type binance_client: Client
+    :param symbols: required
+    :type symbols: list
+    :param stack: required
+    :type stack: LifoQueue
+    """
+    current_list = get_spread(binance_client, symbols)
+
+    if stack.qsize() == 0:
+        for symbol in current_list:
+            logger.info('Symbol: {:10}, spread, USD: {:018.10f}'.format(symbol[0], symbol[1]))
+    else:
+        previous_lst = stack.get()
+        for previous_symbol, current_symbol in zip(previous_lst, current_list):
+            delta = abs(current_symbol[1] - previous_symbol[1])
+            logger.info('Symbol: {:10}, spread, USD: {:018.10f}, delta: {:018.10f}\n'.format(current_symbol[0], current_symbol[1], delta))
+    stack.put(current_list)
 
 
 if __name__ == "__main__":
@@ -143,12 +185,22 @@ if __name__ == "__main__":
         * for the latest order book
     ''')
 
-    for symbol in top_quote_asset_btc_volumes:
-        order_book = client.get_order_book(symbol=symbol[0])
-        spread = get_spread(order_book['asks'], order_book['bids'])
-        app_logger.info('Symbol: {:10}, spread, USD: {:018.10f}'.format(symbol[0], spread))
+    res = get_spread(client, top_quote_asset_btc_volumes)
+    for symbol in res:
+        app_logger.info('Symbol: {:10}, spread, USD: {:018.10f}'.format(symbol[0], symbol[1]))
 
-    app_logger.info('\nCompleted')
+# Q (5)
+    app_logger.info('''\n
+        (5) Every 10 seconds print the result of Q4
+        and the absolute delta from the previous value for each symbol.
+    ''')
 
-# 5. Every 10 seconds print the result of Q4 and the absolute delta from the previous value for each symbol.
-# 6. Make the output of Q5 accessible by querying http://localhost:8080/metrics using the Prometheus Metrics format.
+    stack = LifoQueue(maxsize=1)
+    task.LoopingCall(output_spread_and_delta, app_logger, client, top_quote_asset_btc_volumes, stack).start(10)
+    reactor.run()
+
+# Q (6)
+    app_logger.info('''\n
+        (6) Make the output of Q5 accessible by querying http://localhost:8080/metrics
+        using the Prometheus Metrics format.
+    ''')
