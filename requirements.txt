@@ -1,1 +1,2 @@
 python-binance==0.7.5
+prometheus-client==0.9.0

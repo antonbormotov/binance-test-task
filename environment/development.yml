@@ -10,3 +10,7 @@ services:
     environment:
       TZ: Asia/Krasnoyarsk
     command: python /usr/src/binance/main.py
+#  prometheus:
+#    image: prom/prometheus
+#    ports:
+#      - 9090:9090

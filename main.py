@@ -9,6 +9,8 @@ from binance.websockets import BinanceSocketManager
 from bisect import bisect_right
 from twisted.internet import task, reactor
 from queue import LifoQueue
+from prometheus_client import REGISTRY, start_http_server
+from prometheus_client.core import GaugeMetricFamily
 
 
 def highest_bid_price(bids):
@@ -59,7 +61,7 @@ def get_spread(binance_client, symbols):
     return result
 
 
-def output_spread_and_delta(logger, binance_client, symbols, stack):
+def output_spread_and_delta(logger, binance_client, symbols, stack, custom_collector):
     """
     :param logger: required
     :param binance_client: required
@@ -70,16 +72,34 @@ def output_spread_and_delta(logger, binance_client, symbols, stack):
     :type stack: LifoQueue
     """
     current_list = get_spread(binance_client, symbols)
+    result = []
 
-    if stack.qsize() == 0:
-        for symbol in current_list:
-            logger.info('Symbol: {:10}, spread, USD: {:018.10f}'.format(symbol[0], symbol[1]))
-    else:
+    if stack.qsize() != 0:
         previous_lst = stack.get()
+        logger.info('\n')
         for previous_symbol, current_symbol in zip(previous_lst, current_list):
             delta = abs(current_symbol[1] - previous_symbol[1])
-            logger.info('Symbol: {:10}, spread, USD: {:018.10f}, delta: {:018.10f}\n'.format(current_symbol[0], current_symbol[1], delta))
+            logger.info('Symbol: {:10}, spread, USD: {:018.10f}, delta: {:018.10f}'.format(current_symbol[0], current_symbol[1], delta))
+            result.append([current_symbol[0], current_symbol[1], delta])
     stack.put(current_list)
+    custom_collector.set(result)
+
+
+class CustomCollector(object):
+    result = []
+
+    def __init__(self):
+        pass
+
+    def set(self, result):
+        self.result = result
+
+    def collect(self):
+        for symbol in self.result:
+            value = GaugeMetricFamily(symbol[0], 'Symbol', labels='v')
+            value.add_metric(['Spread'], symbol[1])
+            value.add_metric(['Delta'], symbol[2])
+            yield value
 
 
 if __name__ == "__main__":
@@ -195,12 +215,16 @@ if __name__ == "__main__":
         and the absolute delta from the previous value for each symbol.
     ''')
 
-    stack = LifoQueue(maxsize=1)
-    task.LoopingCall(output_spread_and_delta, app_logger, client, top_quote_asset_btc_volumes, stack).start(10)
-    reactor.run()
-
 # Q (6)
     app_logger.info('''\n
         (6) Make the output of Q5 accessible by querying http://localhost:8080/metrics
         using the Prometheus Metrics format.
     ''')
+
+    start_http_server(8080)
+    custom_collector = CustomCollector()
+    REGISTRY.register(custom_collector)
+
+    stack = LifoQueue(maxsize=1)
+    task.LoopingCall(output_spread_and_delta, app_logger, client, top_quote_asset_btc_volumes, stack).start(10)
+    reactor.run()
