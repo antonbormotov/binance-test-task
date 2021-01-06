@@ -226,5 +226,5 @@ if __name__ == "__main__":
     REGISTRY.register(custom_collector)
 
     stack = LifoQueue(maxsize=1)
-    task.LoopingCall(output_spread_and_delta, app_logger, client, top_quote_asset_btc_volumes, stack).start(10)
+    task.LoopingCall(output_spread_and_delta, app_logger, client, top_quote_asset_btc_volumes, stack, custom_collector).start(10)
     reactor.run()
